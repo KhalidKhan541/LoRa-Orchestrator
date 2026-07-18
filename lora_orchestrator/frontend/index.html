@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LoRA Orchestrator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js"></script>
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="header">
+    <h1>⚡ LoRA Orchestrator</h1>
+    <span id="statusBadge" class="status-badge">Idle</span>
+    <span id="sessionIdDisplay" class="session-id">No session</span>
+  </header>
+
+  <!-- Main Layout -->
+  <div class="main-layout">
+
+    <!-- LEFT PANEL -->
+    <div class="left-panel">
+
+      <!-- Upload Panel -->
+      <div class="panel">
+        <div class="panel-title">Dataset</div>
+        <div id="uploadZone" class="upload-zone">
+          <div class="icon">📁</div>
+          <div class="label">Drop dataset here or click to browse</div>
+          <div class="formats">.csv · .jsonl · .json</div>
+        </div>
+        <input type="file" id="fileInput" accept=".csv,.jsonl,.json" hidden>
+        <div id="uploadFileInfo" class="upload-file-info" style="display:none;">
+          <span class="name" id="uploadFileName"></span>
+          <span class="size" id="uploadFileSize"></span>
+          <span class="check" id="uploadCheck">✓</span>
+        </div>
+        <div id="uploadProgress" class="progress-bar" style="display:none;">
+          <div class="fill" id="uploadProgressFill" style="width:0%"></div>
+        </div>
+      </div>
+
+      <!-- Config Panel -->
+      <div class="panel">
+        <div class="panel-title">Configuration</div>
+        <div class="config-form">
+          <div class="form-group">
+            <label>Base Model</label>
+            <select id="baseModelSelect">
+              <option value="qwen2.5-7b">Qwen2.5-7B-Instruct</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Template Format</label>
+            <select id="templateSelect">
+              <option value="alpaca">Alpaca</option>
+              <option value="sharegpt">ShareGPT</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Target Metric</label>
+            <select id="targetMetricSelect">
+              <option value="rouge_l">ROUGE-L</option>
+              <option value="bleu">BLEU</option>
+              <option value="perplexity">Perplexity</option>
+              <option value="exact_match">Exact Match</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Target Value</label>
+            <input type="number" id="targetValueInput" value="0.60" min="0" max="1" step="0.01">
+          </div>
+          <div class="form-group">
+            <label>Max Iterations</label>
+            <input type="number" id="maxIterInput" value="3" min="1" max="5">
+          </div>
+          <div class="form-group">
+            <label>Max Samples</label>
+            <input type="number" id="maxSamplesInput" value="10000" min="100" max="500000" step="100">
+          </div>
+          <div class="toggle-row">
+            <span class="label">4-bit Quantization</span>
+            <div id="quantizationToggle" class="toggle active" data-key="quantization"></div>
+          </div>
+          <div class="toggle-row">
+            <span class="label">W&B Tracking</span>
+            <div id="wandbToggle" class="toggle" data-key="use_wandb"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Start Button -->
+      <button id="startBtn" class="start-btn" disabled>
+        ▶ Start Fine-Tuning
+      </button>
+
+      <!-- Agent Log -->
+      <div class="panel">
+        <div class="panel-title">Agent Log</div>
+        <div id="agentLog" class="agent-log">
+          <div class="log-entry"><span class="timestamp">[--:--:--]</span> Waiting for pipeline start...</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT PANEL -->
+    <div class="right-panel">
+
+      <!-- Pipeline Visualizer -->
+      <div class="panel">
+        <div class="panel-title">Pipeline</div>
+        <div class="pipeline">
+          <div class="pipeline-node node-idle" data-agent="dataset">
+            <div class="node-box">📊</div>
+            <div class="node-label">Dataset</div>
+          </div>
+          <div class="pipeline-arrow">→</div>
+          <div class="pipeline-node node-idle" data-agent="hyperparam">
+            <div class="node-box">⚙️</div>
+            <div class="node-label">Hyperparam</div>
+          </div>
+          <div class="pipeline-arrow">→</div>
+          <div class="pipeline-node node-idle" data-agent="training">
+            <div class="node-box">🏋️</div>
+            <div class="node-label">Training</div>
+          </div>
+          <div class="pipeline-arrow">→</div>
+          <div class="pipeline-node node-idle" data-agent="eval">
+            <div class="node-box">📏</div>
+            <div class="node-label">Eval</div>
+          </div>
+          <div class="pipeline-arrow">→</div>
+          <div class="pipeline-node node-idle" data-agent="decision">
+            <div class="node-box">🧠</div>
+            <div class="node-label">Decision</div>
+          </div>
+          <div class="pipeline-arrow">→</div>
+          <div class="pipeline-node node-idle" data-agent="report">
+            <div class="node-box">📄</div>
+            <div class="node-label">Report</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Loss Chart -->
+      <div class="panel">
+        <div class="panel-title">Live Loss</div>
+        <div class="chart-container">
+          <canvas id="lossChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Eval Scores + Hyperparams -->
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-lg);">
+        <div class="panel">
+          <div class="panel-title">Evaluation Scores</div>
+          <div class="metrics-grid" style="margin-bottom:0;">
+            <div class="metric-card" id="metricBleu">
+              <div class="metric-label">BLEU</div>
+              <div class="metric-value" id="bleuValue">—</div>
+              <div class="metric-delta" id="bleuDelta"></div>
+            </div>
+            <div class="metric-card" id="metricRouge">
+              <div class="metric-label">ROUGE-L</div>
+              <div class="metric-value" id="rougeValue">—</div>
+              <div class="metric-delta" id="rougeDelta"></div>
+            </div>
+            <div class="metric-card" id="metricPpl">
+              <div class="metric-label">Perplexity</div>
+              <div class="metric-value" id="pplValue">—</div>
+              <div class="metric-delta" id="pplDelta"></div>
+            </div>
+            <div class="metric-card" id="metricEm">
+              <div class="metric-label">Exact Match</div>
+              <div class="metric-value" id="emValue">—</div>
+              <div class="metric-delta" id="emDelta"></div>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">Hyperparameters</div>
+          <div id="hpPanel" class="hp-panel" style="background:transparent;padding:0;">
+            <div class="hp-grid" id="hpGrid"></div>
+            <div class="hp-reasoning" id="hpReasoning"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Report Panel -->
+      <div id="reportPanel" class="report-panel">
+        <div class="report-header" id="reportHeader">
+          <span id="reportIcon"></span>
+          <span id="reportTitle"></span>
+        </div>
+        <div id="reportContent" class="report-content"></div>
+        <div class="report-actions">
+          <button id="downloadReportBtn">⬇ Download Report (.md)</button>
+          <button id="downloadAdapterBtn">⬇ Download Adapter (.zip)</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="js/upload.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/stream.js"></script>
+  <script src="js/report.js"></script>
+  <script src="js/app.js"></script>
+
+</body>
+</html>
